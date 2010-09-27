@@ -8,6 +8,7 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
 import static thepusher.PusherTest.SimpleBinding.PASSWORD;
 import static thepusher.PusherTest.SimpleBinding.PUSHED;
 import static thepusher.PusherTest.SimpleBinding.USERNAME;
@@ -60,6 +61,7 @@ public class PusherTest {
     Pusher<SimpleBinding> p = PusherBase.create(SimpleBinding.class, Push.class);
     p.bindInstance(USERNAME, "sam");
     p.bindInstance(PASSWORD, "blah");
+    p.bindInstance(PASSWORD, "blah");
 
     String username = p.get(USERNAME, String.class);
     assertEquals("sam", username);
@@ -76,11 +78,9 @@ public class PusherTest {
     assertEquals("sam", pushed2.username);
     assertEquals("blah", pushed2.password);
 
-    p.bindClass(PUSHED, Pushed3.class);
-
-    Pushed3 pushed3 = p.get(PUSHED, Pushed3.class);
-    assertEquals("sam", pushed2.username);
-    assertEquals("blah", pushed2.password);
+    Pushed3 pushed3 = p.create(Pushed3.class);
+    assertEquals("sam", pushed3.username);
+    assertEquals("blah", pushed3.password);
   }
 
   public static class B {
@@ -121,6 +121,10 @@ public class PusherTest {
   public static class C {
     private final D d;
 
+    public C(String s) {
+      d = null;
+    }
+
     public C(@Push(USERNAME) D d) {
       this.d = d;
     }
@@ -141,4 +145,138 @@ public class PusherTest {
     assertEquals(c, e.c);
   }
 
+  public static class G {
+    G(@Push(USERNAME) H h) {}
+  }
+
+  public static class H {
+    H(@Push(PASSWORD) G g) {}
+  }
+
+  public static class I {
+    I(@Push(PASSWORD) G g) {}
+  }
+
+  @Test
+  public void cyclicConstructor() {
+    Pusher<SimpleBinding> p = PusherBase.create(SimpleBinding.class, Push.class);
+    p.bindClass(USERNAME, H.class);
+    p.bindClass(PASSWORD, G.class);
+
+    try {
+      p.get(USERNAME, H.class);
+      fail("Should fail");
+    } catch (PusherException pe) {
+    }
+
+    try {
+      p.create(I.class);
+      fail("Should fail");
+    } catch (PusherException pe) {
+    }
+
+  }
+
+  @Test
+  public void notbound() {
+    Pusher<SimpleBinding> p = PusherBase.create(SimpleBinding.class, Push.class);
+    try {
+      p.create(A.class);
+      fail("Should fail");
+    } catch (PusherException pe) {
+    }
+    try {
+      p.create(Pushed4.class);
+      fail("Should fail");
+    } catch (PusherException pe) {
+    }
+  }
+
+
+  @Retention(RetentionPolicy.RUNTIME)
+  public @interface PushNoTarget {
+    SimpleBinding value();
+  }
+
+  @Target({ElementType.METHOD})
+  @Retention(RetentionPolicy.RUNTIME)
+  public @interface PushWrongTarget {
+    SimpleBinding value();
+  }
+
+  @Target({ElementType.FIELD})
+  @Retention(RetentionPolicy.RUNTIME)
+  public @interface PushOneTarget {
+    SimpleBinding value();
+  }
+
+  @Target({ElementType.FIELD})
+  @Retention(RetentionPolicy.CLASS)
+  public @interface PushWrongRetention {
+    SimpleBinding value();
+  }
+
+  @Target({ElementType.FIELD})
+  public @interface PushNoRetention {
+    SimpleBinding value();
+  }
+
+  @Target({ElementType.FIELD})
+  @Retention(RetentionPolicy.RUNTIME)
+  public @interface PushWrongReturn {
+    String value();
+  }
+
+  @Target({ElementType.FIELD})
+  @Retention(RetentionPolicy.RUNTIME)
+  public @interface PushNoValue {
+  }
+
+  @Test
+  public void testAnnotation() {
+    try { PusherBase.create(SimpleBinding.class, PushNoTarget.class); fail("should fail"); } catch (PusherException e) {}
+    try { PusherBase.create(SimpleBinding.class, PushWrongTarget.class); fail("should fail"); } catch (PusherException e) {}
+    PusherBase.create(SimpleBinding.class, PushOneTarget.class);
+    try { PusherBase.create(SimpleBinding.class, PushWrongRetention.class); fail("should fail"); } catch (PusherException e) {}
+    try { PusherBase.create(SimpleBinding.class, PushNoRetention.class); fail("should fail"); } catch (PusherException e) {}
+    try { PusherBase.create(SimpleBinding.class, PushWrongReturn.class); fail("should fail"); } catch (PusherException e) {}
+    try { PusherBase.create(SimpleBinding.class, PushNoValue.class); fail("should fail"); } catch (PusherException e) {}
+  }
+
+  public static class J {
+    J(@Push(PASSWORD) G g, String i) {}
+  }
+
+  public static class K {
+    K(@Push(PASSWORD) G g) {}
+    K(@Push(USERNAME) H h) {}
+  }
+
+  @Test
+  public void testConstructors() {
+    Pusher<SimpleBinding> p = PusherBase.create(SimpleBinding.class, Push.class);
+    p.bindInstance(PASSWORD, null);
+    p.bindInstance(PASSWORD, null);
+    p.bindInstance(USERNAME, null);
+    try {
+      p.create(J.class);
+      fail("should fail");
+    } catch (PusherException e) {}
+    try {
+      p.create(K.class);
+      fail("should fail");
+    } catch (PusherException e) {}
+  }
+
+  @Test
+  public void testWrongType() {
+    Pusher<SimpleBinding> p = PusherBase.create(SimpleBinding.class, Push.class);
+    p.bindInstance(USERNAME, "sam");
+    p.bindInstance(PASSWORD, 1);
+
+    try {
+      p.create(Pushed.class);
+      fail("should fail");
+    } catch(PusherException e) {}
+  }
 }

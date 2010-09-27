@@ -13,15 +13,18 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
 
 /**
- * Pushes values into objects.
+ * Pushes values into objects. Supports fields and constructors.
  * <p/>
- * User: sam
- * Date: Sep 27, 2010
- * Time: 1:14:48 PM
+ *
+ * @author Sam Pullara
+ * @author John Beatty
+ *         Date: Sep 27, 2010
+ *         Time: 1:14:48 PM
  */
+@SuppressWarnings({"unchecked"})
 public class PusherBase<E> implements Pusher<E> {
+  private static Object NULL = new Object();
   private final static Logger logger = Logger.getLogger(Pusher.class.getName());
-
   private final Class<? extends Annotation> pushAnnotation;
   private final Method valueMethod;
 
@@ -79,11 +82,12 @@ public class PusherBase<E> implements Pusher<E> {
     try {
       T o = null;
       Constructor<?>[] declaredConstructors = type.getDeclaredConstructors();
+      Object[] parameterValues = null;
       for (Constructor constructor : declaredConstructors) {
+        constructor.setAccessible(true);
         Annotation[][] parameterAnnotations = constructor.getParameterAnnotations();
         int length = parameterAnnotations.length;
         if (length == 0) continue;
-        Object[] parameterValues = null;
         for (int i = 0; i < length; i++) {
           Annotation foundAnnotation = null;
           for (Annotation parameterAnnotation : parameterAnnotations[i]) {
@@ -98,16 +102,20 @@ public class PusherBase<E> implements Pusher<E> {
               break;
             }
             throw new PusherException("All parameters of constructor must be annotated: " + constructor);
-          }
-          // Possibly a valid constructor
-          if (parameterValues == null) {
+          } else if (i == 0) {
+            if (parameterValues != null) {
+              throw new PusherException("Already found a valid constructor");
+            }
             parameterValues = new Object[length];
           }
-          //noinspection SuspiciousMethodCalls
-          parameterValues[i] = instanceBindings.get(valueMethod.invoke(foundAnnotation));
+          E value = (E) valueMethod.invoke(foundAnnotation);
+          if (instanceBindings.containsKey(value)) {
+            parameterValues[i] = get(value);
+          } else {
+            throw new PusherException("Binding not bound: " + value);
+          }
         }
         if (parameterValues != null) {
-          //noinspection unchecked
           o = (T) constructor.newInstance(parameterValues);
         }
       }
@@ -120,32 +128,43 @@ public class PusherBase<E> implements Pusher<E> {
     }
   }
 
+  private Object get(E key) {
+    Object value = instanceBindings.get(key);
+    if (value == NULL) return null;
+    return value;
+  }
+
   @Override
   @SuppressWarnings({"unchecked"})
   public <T> void push(T o) {
-    try {
-      Field[] declaredFields = o.getClass().getDeclaredFields();
-      for (Field field : declaredFields) {
-        Annotation annotation = field.getAnnotation(pushAnnotation);
-        if (annotation != null) {
-          E fieldBinding = (E) valueMethod.invoke(annotation);
-          Class removed = classBindings.remove(fieldBinding);
-          if (removed != null) {
-            instanceBindings.put(fieldBinding, instantiate(removed));
-          }
-          Object bound = instanceBindings.get(fieldBinding);
-          if (bound == null) {
-            throw new PusherException(fieldBinding + " is not bound");
-          }
-          field.setAccessible(true);
+    Field[] declaredFields = o.getClass().getDeclaredFields();
+    for (Field field : declaredFields) {
+      Annotation annotation = field.getAnnotation(pushAnnotation);
+      if (annotation != null) {
+        E fieldBinding;
+        try {
+          fieldBinding = (E) valueMethod.invoke(annotation);
+        } catch (Exception e) {
+          throw new PusherException(e);
+        }
+        Class removed = classBindings.remove(fieldBinding);
+        if (removed != null) {
+          rebind(fieldBinding, instantiate(removed));
+        }
+        Object bound = get(fieldBinding);
+        if (bound == null) {
+          throw new PusherException(fieldBinding + " is not bound");
+        }
+        field.setAccessible(true);
+        try {
           field.set(o, bound);
-          if (removed != null) {
-            push(instanceBindings.get(fieldBinding));
-          }
+        } catch (Exception e) {
+          throw new PusherException(e);
+        }
+        if (removed != null) {
+          push(get(fieldBinding));
         }
       }
-    } catch (Exception e) {
-      throw new PusherException(e);
     }
   }
 
@@ -155,22 +174,27 @@ public class PusherBase<E> implements Pusher<E> {
   }
 
   private void rebind(E binding, Object instance) {
+    if (instance == null) {
+      instance = NULL;
+    }
     Object alreadyBound = instanceBindings.put(binding, instance);
+    if (alreadyBound == NULL) {
+      alreadyBound = null;
+    }
     if (alreadyBound != null) {
       logger.warning("Binding rebound: " + binding + " was " + alreadyBound);
     }
   }
 
-  @SuppressWarnings({"unchecked"})
   @Override
   public <F> F get(E binding, Class<F> type) {
     Class removed = classBindings.remove(binding);
     if (removed != null) {
       Object o = instantiate(removed);
-      instanceBindings.put(binding, o);
+      rebind(binding, o);
       push(o);
     }
-    return (F) instanceBindings.get(binding);
+    return (F) get(binding);
   }
 
   /**
