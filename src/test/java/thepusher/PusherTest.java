@@ -279,4 +279,19 @@ public class PusherTest {
       fail("should fail");
     } catch(PusherException e) {}
   }
+
+  public static class L {
+  }
+
+  public static class M {
+    M(@Push(USERNAME) L l) {}
+  }
+
+  @Test
+  public void testDepends() {
+    Pusher<SimpleBinding> p = PusherBase.create(SimpleBinding.class, Push.class);
+    p.bindClass(USERNAME, L.class);
+
+    p.create(M.class);
+  }
 }

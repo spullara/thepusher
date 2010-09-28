@@ -108,11 +108,18 @@ public class PusherBase<E> implements Pusher<E> {
             }
             parameterValues = new Object[length];
           }
-          E value = (E) valueMethod.invoke(foundAnnotation);
-          if (instanceBindings.containsKey(value)) {
-            parameterValues[i] = get(value);
+          E parameterBinding = (E) valueMethod.invoke(foundAnnotation);
+          Class removed = classBindings.remove(parameterBinding);
+          if (removed != null) {
+            rebind(parameterBinding, instantiate(removed));
+          }
+          if (instanceBindings.containsKey(parameterBinding)) {
+            parameterValues[i] = get(parameterBinding);
+            if (removed != null) {
+              push(parameterValues[i]);
+            }
           } else {
-            throw new PusherException("Binding not bound: " + value);
+            throw new PusherException("Binding not bound: " + parameterBinding);
           }
         }
         if (parameterValues != null) {
@@ -152,6 +159,9 @@ public class PusherBase<E> implements Pusher<E> {
           rebind(fieldBinding, instantiate(removed));
         }
         Object bound = get(fieldBinding);
+        if (removed != null) {
+          push(bound);
+        }
         if (bound == null) {
           throw new PusherException(fieldBinding + " is not bound");
         }
@@ -160,9 +170,6 @@ public class PusherBase<E> implements Pusher<E> {
           field.set(o, bound);
         } catch (Exception e) {
           throw new PusherException(e);
-        }
-        if (removed != null) {
-          push(get(fieldBinding));
         }
       }
     }
