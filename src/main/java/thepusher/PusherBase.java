@@ -133,27 +133,25 @@ public class PusherBase<E> implements Pusher<E> {
   @Override
   @SuppressWarnings({"unchecked"})
   public <T> T push(T o) {
-    Field[] declaredFields = o.getClass().getDeclaredFields();
-    for (Field field : declaredFields) {
-      Annotation annotation = field.getAnnotation(pushAnnotation);
-      if (annotation != null) {
-        E fieldBinding;
-        try {
+    try {
+      Field[] declaredFields = o.getClass().getDeclaredFields();
+      for (Field field : declaredFields) {
+        Annotation annotation = field.getAnnotation(pushAnnotation);
+        if (annotation != null) {
+          E fieldBinding;
           fieldBinding = (E) valueMethod.invoke(annotation);
-        } catch (Exception e) {
-          throw new PusherException(e);
-        }
-        Object bound;
-        bound = getOrCreate(fieldBinding);
-        field.setAccessible(true);
-        try {
+          Object bound;
+          bound = getOrCreate(fieldBinding);
+          field.setAccessible(true);
           field.set(o, bound);
-        } catch (Exception e) {
-          throw new PusherException(e);
         }
       }
+      return o;
+    } catch (PusherException e) {
+      throw e;
+    } catch (Exception e) {
+      throw new PusherException(e);
     }
-    return o;
   }
 
   private <T> Object getOrCreate(E fieldBinding) {
