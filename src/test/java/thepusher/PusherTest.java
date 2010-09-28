@@ -289,9 +289,17 @@ public class PusherTest {
 
   @Test
   public void testDepends() {
-    Pusher<SimpleBinding> p = PusherBase.create(SimpleBinding.class, Push.class);
-    p.bindClass(USERNAME, L.class);
+    {
+      Pusher<SimpleBinding> p = PusherBase.create(SimpleBinding.class, Push.class);
+      p.bindClass(USERNAME, L.class);
 
-    p.create(M.class);
+      p.create(M.class);
+    }
+    {
+      Pusher<SimpleBinding> p = PusherBase.create(SimpleBinding.class, Push.class);
+      p.bindClass(USERNAME, L.class);
+
+      p.create(M.class);
+    }
   }
 }
