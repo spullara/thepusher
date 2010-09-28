@@ -143,7 +143,7 @@ public class PusherBase<E> implements Pusher<E> {
 
   @Override
   @SuppressWarnings({"unchecked"})
-  public <T> void push(T o) {
+  public <T> T push(T o) {
     Field[] declaredFields = o.getClass().getDeclaredFields();
     for (Field field : declaredFields) {
       Annotation annotation = field.getAnnotation(pushAnnotation);
@@ -173,6 +173,7 @@ public class PusherBase<E> implements Pusher<E> {
         }
       }
     }
+    return o;
   }
 
   @Override

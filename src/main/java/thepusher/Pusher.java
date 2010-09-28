@@ -16,5 +16,5 @@ public interface Pusher<E> {
 
   <T> T create(Class<T> type);
 
-  <T> void push(T o);
+  <T> T push(T o);
 }
