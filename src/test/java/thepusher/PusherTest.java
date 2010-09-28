@@ -244,7 +244,7 @@ public class PusherTest {
   }
 
   public static class J {
-    J(@Push(PASSWORD) G g, String i) {}
+    J(@Push(PASSWORD) G g, @Deprecated String i) {}
   }
 
   public static class K {
