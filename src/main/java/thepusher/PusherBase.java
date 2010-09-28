@@ -79,9 +79,7 @@ public class PusherBase<E> implements Pusher<E> {
 
   @Override
   public <T> T create(Class<T> type) {
-    T o = instantiate(type);
-    push(o);
-    return o;
+    return push(instantiate(type));
   }
 
   private static final Map<Class, Constructor[]> constructorMap = new ConcurrentHashMap<Class, Constructor[]>();
@@ -90,7 +88,9 @@ public class PusherBase<E> implements Pusher<E> {
     try {
       T o = null;
       Constructor<?>[] declaredConstructors = constructorMap.get(type);
+      boolean cacheit = false;
       if (declaredConstructors == null) {
+        cacheit = true;
         declaredConstructors = type.getDeclaredConstructors();
       }
       Object[] parameterValues = null;
@@ -119,15 +119,15 @@ public class PusherBase<E> implements Pusher<E> {
             }
             parameterValues = new Object[length];
           }
-          E parameterBinding = (E) valueMethod.invoke(foundAnnotation);
-          parameterValues[i] = getOrCreate(parameterBinding);
+          parameterValues[i] = getOrCreate((E) valueMethod.invoke(foundAnnotation));
         }
         if (parameterValues != null) {
-          constructorMap.put(type, new Constructor[]{constructor});
+          if (cacheit) constructorMap.put(type, new Constructor[]{constructor});
           o = (T) constructor.newInstance(parameterValues);
         }
       }
       if (o == null) {
+        if (cacheit) constructorMap.put(type, new Constructor[0]);
         o = type.newInstance();
       }
       return o;
@@ -222,11 +222,11 @@ public class PusherBase<E> implements Pusher<E> {
   /**
    * Create a new base Pusher.
    *
-   * @param simpleBindingClass
+   * @param bindingEnumeration
    * @param <E>
    * @return
    */
-  public static <E> Pusher<E> create(Class<E> simpleBindingClass, Class<? extends Annotation> pushAnnotation) {
-    return new PusherBase<E>(simpleBindingClass, pushAnnotation);
+  public static <E> Pusher<E> create(Class<E> bindingEnumeration, Class<? extends Annotation> pushAnnotation) {
+    return new PusherBase<E>(bindingEnumeration, pushAnnotation);
   }
 }
