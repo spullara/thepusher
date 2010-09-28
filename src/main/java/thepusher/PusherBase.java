@@ -150,24 +150,26 @@ public class PusherBase<E> implements Pusher<E> {
     try {
       List<Field> fields;
       Class aClass = o.getClass();
-      fields = fieldsMap.get(aClass);
-      if (fields == null) {
-        fields = ImmutableList.copyOf(Iterables.filter(Arrays.asList(aClass.getDeclaredFields()), new Predicate<Field>() {
-          public boolean apply(Field field) {
-            Annotation annotation = field.getAnnotation(pushAnnotation);
-            if (annotation != null) {
-              field.setAccessible(true);
+      do {
+        fields = fieldsMap.get(aClass);
+        if (fields == null) {
+          fields = ImmutableList.copyOf(Iterables.filter(Arrays.asList(aClass.getDeclaredFields()), new Predicate<Field>() {
+            public boolean apply(Field field) {
+              Annotation annotation = field.getAnnotation(pushAnnotation);
+              if (annotation != null) {
+                field.setAccessible(true);
+              }
+              return annotation != null;
             }
-            return annotation != null;
-          }
-        }));
-        fieldsMap.put(aClass, fields);
-      }
-      for (Field field : fields) {
-        E fieldBinding = (E) valueMethod.invoke(field.getAnnotation(pushAnnotation));
-        Object bound = getOrCreate(fieldBinding);
-        field.set(o, bound);
-      }
+          }));
+          fieldsMap.put(aClass, fields);
+        }
+        for (Field field : fields) {
+          E fieldBinding = (E) valueMethod.invoke(field.getAnnotation(pushAnnotation));
+          Object bound = getOrCreate(fieldBinding);
+          field.set(o, bound);
+        }
+      } while ((aClass = aClass.getSuperclass()) != Object.class);
       return o;
     } catch (PusherException e) {
       throw e;

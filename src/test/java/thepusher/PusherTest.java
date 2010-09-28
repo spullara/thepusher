@@ -302,4 +302,22 @@ public class PusherTest {
       p.create(M.class);
     }
   }
+
+  public static class N {
+    protected @Push(USERNAME) String username;
+  }
+
+  public static class O extends N {
+    @Push(PASSWORD) String password;
+  }
+
+  @Test
+  public void testSuperclass() {
+    Pusher<SimpleBinding> p = PusherBase.create(SimpleBinding.class, Push.class);
+    p.bindInstance(USERNAME, "sam");
+    p.bindInstance(PASSWORD, "blah");
+    O o = p.create(O.class);
+    assertEquals("sam", o.username);
+    assertEquals("blah", o.password);
+  }
 }
