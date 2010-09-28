@@ -1,5 +1,9 @@
 package thepusher;
 
+import com.google.common.base.Predicate;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Iterables;
+
 import java.lang.annotation.Annotation;
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -8,6 +12,8 @@ import java.lang.annotation.Target;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
@@ -78,10 +84,15 @@ public class PusherBase<E> implements Pusher<E> {
     return o;
   }
 
+  private static final Map<Class, Constructor[]> constructorMap = new ConcurrentHashMap<Class, Constructor[]>();
+
   private <T> T instantiate(Class<T> type) {
     try {
       T o = null;
-      Constructor<?>[] declaredConstructors = type.getDeclaredConstructors();
+      Constructor<?>[] declaredConstructors = constructorMap.get(type);
+      if (declaredConstructors == null) {
+        declaredConstructors = type.getDeclaredConstructors();
+      }
       Object[] parameterValues = null;
       for (Constructor constructor : declaredConstructors) {
         constructor.setAccessible(true);
@@ -112,6 +123,7 @@ public class PusherBase<E> implements Pusher<E> {
           parameterValues[i] = getOrCreate(parameterBinding);
         }
         if (parameterValues != null) {
+          constructorMap.put(type, new Constructor[]{constructor});
           o = (T) constructor.newInstance(parameterValues);
         }
       }
@@ -130,21 +142,28 @@ public class PusherBase<E> implements Pusher<E> {
     return value;
   }
 
+  private static final Map<Class, List<Field>> fieldsMap = new ConcurrentHashMap<Class, List<Field>>();
+
   @Override
   @SuppressWarnings({"unchecked"})
   public <T> T push(T o) {
     try {
-      Field[] declaredFields = o.getClass().getDeclaredFields();
-      for (Field field : declaredFields) {
-        Annotation annotation = field.getAnnotation(pushAnnotation);
-        if (annotation != null) {
-          E fieldBinding;
-          fieldBinding = (E) valueMethod.invoke(annotation);
-          Object bound;
-          bound = getOrCreate(fieldBinding);
-          field.setAccessible(true);
-          field.set(o, bound);
-        }
+      List<Field> fields;
+      Class aClass = o.getClass();
+      fields = fieldsMap.get(aClass);
+      if (fields == null) {
+        fields = ImmutableList.copyOf(Iterables.filter(Arrays.asList(aClass.getDeclaredFields()), new Predicate<Field>() {
+          public boolean apply(Field field) {
+            return field.getAnnotation(pushAnnotation) != null;
+          }
+        }));
+        fieldsMap.put(aClass, fields);
+      }
+      for (Field field : fields) {
+        E fieldBinding = (E) valueMethod.invoke(field.getAnnotation(pushAnnotation));
+        Object bound = getOrCreate(fieldBinding);
+        field.setAccessible(true);
+        field.set(o, bound);
       }
       return o;
     } catch (PusherException e) {
