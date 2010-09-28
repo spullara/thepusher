@@ -154,7 +154,11 @@ public class PusherBase<E> implements Pusher<E> {
       if (fields == null) {
         fields = ImmutableList.copyOf(Iterables.filter(Arrays.asList(aClass.getDeclaredFields()), new Predicate<Field>() {
           public boolean apply(Field field) {
-            return field.getAnnotation(pushAnnotation) != null;
+            Annotation annotation = field.getAnnotation(pushAnnotation);
+            if (annotation != null) {
+              field.setAccessible(true);
+            }
+            return annotation != null;
           }
         }));
         fieldsMap.put(aClass, fields);
@@ -162,7 +166,6 @@ public class PusherBase<E> implements Pusher<E> {
       for (Field field : fields) {
         E fieldBinding = (E) valueMethod.invoke(field.getAnnotation(pushAnnotation));
         Object bound = getOrCreate(fieldBinding);
-        field.setAccessible(true);
         field.set(o, bound);
       }
       return o;
