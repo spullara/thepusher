@@ -109,18 +109,7 @@ public class PusherBase<E> implements Pusher<E> {
             parameterValues = new Object[length];
           }
           E parameterBinding = (E) valueMethod.invoke(foundAnnotation);
-          Class removed = classBindings.remove(parameterBinding);
-          if (removed != null) {
-            rebind(parameterBinding, instantiate(removed));
-          }
-          if (instanceBindings.containsKey(parameterBinding)) {
-            parameterValues[i] = get(parameterBinding);
-            if (removed != null) {
-              push(parameterValues[i]);
-            }
-          } else {
-            throw new PusherException("Binding not bound: " + parameterBinding);
-          }
+          parameterValues[i] = getOrCreate(parameterBinding);
         }
         if (parameterValues != null) {
           o = (T) constructor.newInstance(parameterValues);
@@ -154,17 +143,8 @@ public class PusherBase<E> implements Pusher<E> {
         } catch (Exception e) {
           throw new PusherException(e);
         }
-        Class removed = classBindings.remove(fieldBinding);
-        if (removed != null) {
-          rebind(fieldBinding, instantiate(removed));
-        }
-        Object bound = get(fieldBinding);
-        if (removed != null) {
-          push(bound);
-        }
-        if (bound == null) {
-          throw new PusherException(fieldBinding + " is not bound");
-        }
+        Object bound;
+        bound = getOrCreate(fieldBinding);
         field.setAccessible(true);
         try {
           field.set(o, bound);
@@ -174,6 +154,23 @@ public class PusherBase<E> implements Pusher<E> {
       }
     }
     return o;
+  }
+
+  private <T> Object getOrCreate(E fieldBinding) {
+    Object bound;
+    Class removed = classBindings.remove(fieldBinding);
+    if (removed != null) {
+      rebind(fieldBinding, instantiate(removed));
+    }
+    if (instanceBindings.containsKey(fieldBinding)) {
+      bound = get(fieldBinding);
+      if (removed != null) {
+        push(bound);
+      }
+    } else {
+      throw new PusherException(fieldBinding + " is not bound");
+    }
+    return bound;
   }
 
   @Override
