@@ -16,6 +16,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.logging.Logger;
 
 /**
@@ -142,7 +143,7 @@ public class PusherBase<E> implements Pusher<E> {
     return value;
   }
 
-  private static final Map<Class, List<Field>> fieldsMap = new ConcurrentHashMap<Class, List<Field>>();
+  private static final Map<Class, Map<Class, List<Field>>> fieldsPushMap = new ConcurrentHashMap<Class, Map<Class, List<Field>>>();
 
   @Override
   @SuppressWarnings({"unchecked"})
@@ -151,7 +152,12 @@ public class PusherBase<E> implements Pusher<E> {
       List<Field> fields;
       Class aClass = o.getClass();
       do {
-        fields = fieldsMap.get(aClass);
+        Map<Class, List<Field>> classListMap = fieldsPushMap.get(aClass);
+        if (classListMap == null) {
+          classListMap = new ConcurrentHashMap<Class, List<Field>>();
+          fieldsPushMap.put(aClass, classListMap);
+        }
+        fields = classListMap.get(pushAnnotation);
         if (fields == null) {
           fields = ImmutableList.copyOf(Iterables.filter(Arrays.asList(aClass.getDeclaredFields()), new Predicate<Field>() {
             public boolean apply(Field field) {
@@ -162,7 +168,7 @@ public class PusherBase<E> implements Pusher<E> {
               return annotation != null;
             }
           }));
-          fieldsMap.put(aClass, fields);
+          classListMap.put(pushAnnotation, fields);
         }
         for (Field field : fields) {
           E fieldBinding = (E) valueMethod.invoke(field.getAnnotation(pushAnnotation));
